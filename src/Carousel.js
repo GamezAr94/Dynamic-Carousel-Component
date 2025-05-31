@@ -13,12 +13,14 @@ function Carousel({
     isInfinite = true,
     containerHeight = '200px',
     className = '',
+    pauseOnHover = false, // Pause scrolling when hovering over the carousel
 }) {
     const [currentPosition, setCurrentPosition] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const [dragStartX, setDragStartX] = useState(0);
     const [dragStartScrollPosition, setDragStartScrollPosition] = useState(0);
     const [isLayoutReady, setIsLayoutReady] = useState(false);
+    const [isHovering, setIsHovering] = useState(false);
 
     const [autoScrollDirection, setAutoScrollDirection] = useState(() => {
         return initialDirection === 'left-to-right' ? 'right' : 'left';
@@ -59,14 +61,13 @@ function Carousel({
                 const singleSetWidth = totalRenderedWidth / numSets;
 
                 if (singleSetWidth > 0) {
-                    // Ensure singleSetWidth is positive for calculations
                     actualContentWidthRef.current = singleSetWidth;
                     if (isInfinite) {
                         setCurrentPosition(-singleSetWidth);
                     } else {
                         setCurrentPosition(0);
                     }
-                    setIsLayoutReady(true); // Layout is now ready
+                    setIsLayoutReady(true);
                 } else {
                     actualContentWidthRef.current = 0;
                     setIsLayoutReady(false);
@@ -87,15 +88,15 @@ function Carousel({
         // Using a timeout to allow child elements to render and their dimensions to be available.
         const timer = setTimeout(() => {
             calculateWidthsAndSetInitialPosition();
-        }, 50); // 50ms delay, adjust if needed. 0ms can also work but 50ms gives more buffer.
+        }, 50);
 
         return () => clearTimeout(timer);
-    }, [calculateWidthsAndSetInitialPosition, itemsToRender]); // itemsToRender ensures DOM is updated
+    }, [calculateWidthsAndSetInitialPosition, itemsToRender]);
 
     // Automatic Scrolling Logic
     useEffect(() => {
-        // Updated condition to include !isLayoutReady
         if (
+            (isHovering && pauseOnHover) || // Pause if hovering and prop is true
             isDragging ||
             speed === 0 ||
             !isLayoutReady ||
@@ -105,7 +106,7 @@ function Carousel({
         ) {
             if (animationFrameRef.current)
                 cancelAnimationFrame(animationFrameRef.current);
-            lastTimestampRef.current = 0;
+            lastTimestampRef.current = 0; // Reset timestamp so animation resumes smoothly
             return;
         }
 
@@ -116,7 +117,7 @@ function Carousel({
                 return;
             }
 
-            const deltaTime = (timestamp - lastTimestampRef.current) / 1000; // seconds
+            const deltaTime = (timestamp - lastTimestampRef.current) / 1000;
             lastTimestampRef.current = timestamp;
             const moveDistance = speed * deltaTime;
 
@@ -131,27 +132,11 @@ function Carousel({
                 if (isInfinite && actualContentWidthRef.current > 0) {
                     const contentWidth = actualContentWidthRef.current;
                     if (newPosition <= -2 * contentWidth) {
-                        newPosition =
-                            (newPosition % contentWidth) - contentWidth;
-                        // Ensure it doesn't become 0 if newPosition was exactly -2 * contentWidth
-                        if (
-                            newPosition === -contentWidth &&
-                            prevPosition - moveDistance < -2 * contentWidth
-                        )
-                            newPosition =
-                                -contentWidth +
-                                ((prevPosition - moveDistance) % contentWidth);
+                        // newPosition = (newPosition % contentWidth) - contentWidth;
+                        newPosition += contentWidth;
                     } else if (newPosition >= 0) {
-                        newPosition =
-                            (newPosition % contentWidth) - contentWidth;
-                        // Ensure it doesn't become -contentWidth if newPosition was exactly 0
-                        if (
-                            newPosition === -contentWidth &&
-                            prevPosition + moveDistance > 0
-                        )
-                            newPosition =
-                                -contentWidth +
-                                ((prevPosition + moveDistance) % contentWidth);
+                        // newPosition = (newPosition % contentWidth) - contentWidth;
+                        newPosition -= contentWidth;
                     }
                 } else if (
                     !isInfinite &&
@@ -160,7 +145,7 @@ function Carousel({
                 ) {
                     const trackW = trackRef.current.scrollWidth;
                     const viewportW = viewportRef.current.offsetWidth;
-                    const maxScrollOffset = Math.max(0, trackW - viewportW); // Ensure not negative
+                    const maxScrollOffset = Math.max(0, trackW - viewportW);
 
                     if (newPosition > 0) newPosition = 0;
                     if (newPosition < -maxScrollOffset)
@@ -186,7 +171,9 @@ function Carousel({
         isInfinite,
         originalChildrenArray.length,
         isLayoutReady,
-    ]); // Added isLayoutReady to dependencies
+        isHovering,
+        pauseOnHover,
+    ]);
 
     const handleDragStart = (clientX) => {
         setIsDragging(true);
@@ -230,24 +217,13 @@ function Carousel({
                 const contentWidth = actualContentWidthRef.current;
                 let normalizedPos = prevPos;
 
-                // Normalize to the range of the "middle" set: [-contentWidth, -2*contentWidth + epsilon]
-                // If currentPosition is positive (viewing "first" set) or too negative (viewing "third" set)
-                if (normalizedPos >= 0) {
-                    normalizedPos =
-                        (normalizedPos % contentWidth) - contentWidth;
-                    if (normalizedPos === -contentWidth && prevPos !== 0) {
-                        // Avoid snapping 0 to -contentWidth if it was already 0
-                        normalizedPos =
-                            -contentWidth + (prevPos % contentWidth);
-                    }
-                } else if (normalizedPos < -2 * contentWidth) {
-                    // Strictly less than start of 3rd set's copy of 1st item
-                    normalizedPos =
-                        (normalizedPos % contentWidth) - contentWidth;
+                while (normalizedPos >= 0 && contentWidth > 0) {
+                    normalizedPos -= contentWidth;
                 }
-                // If it ends up exactly on -2*contentWidth, it means it's at the start of the third set.
-                // The auto-scroll logic will handle the jump.
-                // The goal here is to bring it conceptually closer to the middle set.
+                while (normalizedPos <= -2 * contentWidth && contentWidth > 0) {
+                    // Use <= to catch exact -2*contentWidth
+                    normalizedPos += contentWidth;
+                }
                 return normalizedPos;
             });
         }
@@ -261,8 +237,12 @@ function Carousel({
         if (isDragging) handleDragMove(e.clientX);
     };
     const onMouseUp = () => handleDragEnd();
-    const onMouseLeave = () => {
+    const onMouseLeaveViewport = () => {
         if (isDragging) handleDragEnd();
+        if (pauseOnHover) setIsHovering(false); // Set hover to false when mouse leaves viewport
+    };
+    const onMouseEnterViewport = () => {
+        if (pauseOnHover) setIsHovering(true); // Set hover to true when mouse enters viewport
     };
 
     const onTouchStart = (e) => {
@@ -277,7 +257,6 @@ function Carousel({
         const handleResize = () => {
             if (animationFrameRef.current)
                 cancelAnimationFrame(animationFrameRef.current);
-            // Recalculate widths and positions. This will also update isLayoutReady.
             calculateWidthsAndSetInitialPosition();
         };
         window.addEventListener('resize', handleResize);
@@ -334,7 +313,8 @@ function Carousel({
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
-            onMouseLeave={onMouseLeave}
+            onMouseLeave={onMouseLeaveViewport}
+            onMouseEnter={onMouseEnterViewport}
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
@@ -345,7 +325,11 @@ function Carousel({
                 ref={trackRef}
                 style={trackStyle}
                 className="carousel-track"
-                aria-live={isDragging || !isLayoutReady ? 'off' : 'polite'}
+                aria-live={
+                    isDragging || !isLayoutReady || (isHovering && pauseOnHover)
+                        ? 'off'
+                        : 'polite'
+                }
             >
                 {itemsToRender.map((child, index) => (
                     <div

@@ -172,7 +172,11 @@ function App() {
                 - the width of the carousel is 100% of the parent container,
                 - and the speed is set to 60.
                 */}
-                <Carousel speed={60} containerHeight="200px">
+                <Carousel
+                    speed={60}
+                    containerHeight="200px"
+                    pauseOnHover={false}
+                >
                     {simpleItems}
                 </Carousel>
             </section>
@@ -210,7 +214,7 @@ function App() {
                     initialDirection="left-to-right"
                     isInfinite={false}
                     containerHeight="280px"
-                    className="custom-carousel-style"
+                    pauseOnHover={false}
                 >
                     {complexItems}
                 </Carousel>
@@ -244,7 +248,12 @@ function App() {
                 - the width of the carousel is 100% of the parent container,
                 - and the speed is set to 30.
                 */}
-                <Carousel speed={40} containerHeight="180px">
+                <Carousel
+                    speed={40}
+                    containerHeight="180px"
+                    isInfinite={true}
+                    pauseOnHover={true}
+                >
                     {simpleItems.slice(0, 3)}
                 </Carousel>
             </section>
@@ -323,6 +332,9 @@ function App() {
                     </li>
                     <li style={{ marginBottom: '5px' }}>
                         ✓ Responsive width (100% of parent).
+                    </li>
+                    <li style={{ marginBottom: '5px' }}>
+                        ✓ Pause on hover (new!).
                     </li>
                 </ul>
             </footer>
